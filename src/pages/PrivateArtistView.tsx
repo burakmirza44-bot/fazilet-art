@@ -95,6 +95,7 @@ interface Artwork {
   dimensions: string;
   description: string;
   image_url: string;
+  video_url?: string;
 }
 
 interface Artist {
@@ -187,19 +188,32 @@ function ArtworkViewer({
         <ChevronRight size={40} strokeWidth={1} />
       </button>
 
-      {/* ── Görsel alanı ── */}
+      {/* ── Görsel / Video alanı ── */}
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '56px 64px', overflow: 'hidden' }}>
         <AnimatePresence mode="wait" initial={false}>
-          <motion.img
-            key={aw.id}
-            src={aw.image_url}
-            alt={aw.title}
-            initial={{ opacity: 0, scale: 0.97 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 1.02 }}
-            transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-            style={{ maxWidth: '100%', maxHeight: 'calc(100vh - 112px)', objectFit: 'contain' }}
-          />
+          {aw.video_url ? (
+            <motion.video
+              key={aw.id}
+              src={aw.video_url}
+              controls
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.32 }}
+              style={{ maxWidth: '100%', maxHeight: 'calc(100vh - 112px)' }}
+            />
+          ) : (
+            <motion.img
+              key={aw.id}
+              src={aw.image_url}
+              alt={aw.title}
+              initial={{ opacity: 0, scale: 0.97 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 1.02 }}
+              transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+              style={{ maxWidth: '100%', maxHeight: 'calc(100vh - 112px)', objectFit: 'contain' }}
+            />
+          )}
         </AnimatePresence>
       </div>
 
@@ -544,14 +558,31 @@ export default function PrivateArtistView() {
                 transition={{ duration: 0.55, delay: 0.04 + i * 0.055, ease: [0.22, 1, 0.36, 1] }}
                 onClick={() => setViewerIdx(i)}
               >
-                {/* Görsel */}
-                <div style={{ width: '100%', aspectRatio: '4/5', overflow: 'hidden', background: C.cardBg, marginBottom: 16, transition: 'background 0.35s ease' }}>
-                  <img
-                    className="aw-card-img"
-                    src={aw.image_url}
-                    alt={aw.title}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                  />
+                {/* Görsel / Video */}
+                <div style={{ width: '100%', aspectRatio: '4/5', overflow: 'hidden', background: C.cardBg, marginBottom: 16, transition: 'background 0.35s ease', position: 'relative' }}>
+                  {aw.video_url ? (
+                    <>
+                      <video
+                        src={aw.video_url}
+                        muted playsInline preload="metadata"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                      />
+                      <div style={{
+                        position: 'absolute', inset: 0, display: 'flex',
+                        alignItems: 'center', justifyContent: 'center',
+                        background: 'rgba(0,0,0,0.18)',
+                      }}>
+                        <span style={{ fontSize: 32, color: '#fff', opacity: 0.85 }}>▶</span>
+                      </div>
+                    </>
+                  ) : (
+                    <img
+                      className="aw-card-img"
+                      src={aw.image_url}
+                      alt={aw.title}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                    />
+                  )}
                 </div>
 
                 {/* Bilgiler */}

@@ -42,7 +42,8 @@ const DATA_DIR    = process.env.DATA_DIR    || path.join(__dirname, 'data');
 const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(DATA_DIR, 'uploads');
 const DB_PATH     = process.env.DB_PATH     || path.join(DATA_DIR, 'gallery.db');
 
-const ALLOWED_MIME      = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const ALLOWED_MIME      = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif',
+  'video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo']);
 const ALLOWED_MIME_PUB  = new Set([...['image/jpeg', 'image/png', 'image/webp', 'image/gif'], 'application/pdf']);
 
 if (!fs.existsSync(DATA_DIR))    fs.mkdirSync(DATA_DIR,    { recursive: true });
@@ -178,6 +179,7 @@ const safeMigrate = (sql: string) => { try { db.exec(sql); } catch { /* already 
   `ALTER TABLE artworks ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`,
   `ALTER TABLE artworks ADD COLUMN updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP`,
   `ALTER TABLE artworks ADD COLUMN viewing_room INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE artworks ADD COLUMN video_url TEXT`,
 ].forEach(safeMigrate);
 
 // Ensure all artists have a token
@@ -206,10 +208,11 @@ const upload = multer({
       : cb(new Error(`Unsupported file type: ${file.mimetype}`)),
 });
 
-// Accept: artist_image (1) + artwork_image_0..N (many)
+// Accept: artist_image (1) + artwork_image_0..N + artwork_video_0..N (many)
 const uploadFull = upload.fields([
   { name: 'artist_image', maxCount: 1 },
   ...Array.from({ length: 50 }, (_, i) => ({ name: `artwork_image_${i}`, maxCount: 1 })),
+  ...Array.from({ length: 50 }, (_, i) => ({ name: `artwork_video_${i}`, maxCount: 1 })),
 ]);
 
 // Publications uploader (images + PDFs)
@@ -282,10 +285,13 @@ const rateLimit = (maxReqs: number, windowMs: number) =>
 // ─── Express ─────────────────────────────────────────────
 const app = express();
 app.use(express.json({ limit: '10mb' }));
-// /uploads hem eski hem yeni path formatlarını destekler
+// /uploads: önce DATA_DIR/uploads, bulamazsa proje kökündeki eski uploads/ klasörü
+const LEGACY_UPLOADS = path.join(__dirname, 'uploads');
 app.use('/uploads', express.static(UPLOADS_DIR));
+app.use('/uploads', express.static(LEGACY_UPLOADS));   // eski yüklenen dosyalar için
 // Geriye dönük uyumluluk: /data/uploads da aynı klasörü sunar
 app.use('/data/uploads', express.static(UPLOADS_DIR));
+app.use('/data/uploads', express.static(LEGACY_UPLOADS));
 
 // CORS — production'da gerçek domain'e kısıt
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '*';
@@ -527,44 +533,45 @@ app.post('/api/artists/full', uploadFull, (req, res, next) => {
 
       // Delete removed artworks
       for (const awId of deletedIds) {
-        const aw = db.prepare(`SELECT image_url FROM artworks WHERE id=?`).get(awId) as any;
+        const aw = db.prepare(`SELECT image_url, video_url FROM artworks WHERE id=?`).get(awId) as any;
         safeUnlink(aw?.image_url);
+        safeUnlink(aw?.video_url);
         db.prepare(`DELETE FROM artworks WHERE id=?`).run(awId);
       }
 
       // Upsert artworks
       for (let i = 0; i < artworksMeta.length; i++) {
-        const meta = artworksMeta[i];
-        const imgFile = files[`artwork_image_${i}`]?.[0];
-        const imgUrl  = imgFile ? `/uploads/${imgFile.filename}` : null;
+        const meta      = artworksMeta[i];
+        const imgFile   = files[`artwork_image_${i}`]?.[0];
+        const vidFile   = files[`artwork_video_${i}`]?.[0];
+        const imgUrl    = imgFile ? `/uploads/${imgFile.filename}` : null;
+        const videoUrl  = vidFile ? `/uploads/${vidFile.filename}` : null;
+        const hasNew    = imgUrl || videoUrl;
 
         if (meta.id) {
           // Update existing
-          if (imgUrl) {
-            const old = db.prepare(`SELECT image_url FROM artworks WHERE id=?`).get(meta.id) as any;
-            safeUnlink(old?.image_url);
+          if (hasNew) {
+            const old = db.prepare(`SELECT image_url, video_url FROM artworks WHERE id=?`).get(meta.id) as any;
+            if (imgUrl)   safeUnlink(old?.image_url);
+            if (videoUrl) safeUnlink(old?.video_url);
           }
-          db.prepare(`
-            UPDATE artworks
-            SET title=?,year=?,medium=?,dimensions=?,status=?,
-                ${imgUrl ? 'image_url=?,' : ''}
-                updated_at=CURRENT_TIMESTAMP
-            WHERE id=?
-          `).run(...(imgUrl
-            ? [meta.title||'Untitled',meta.year||'',meta.medium||'',meta.dimensions||'',meta.status||'Private',imgUrl,meta.id]
-            : [meta.title||'Untitled',meta.year||'',meta.medium||'',meta.dimensions||'',meta.status||'Private',meta.id]
-          ));
+          const sets: string[] = ['title=?','year=?','medium=?','dimensions=?','status=?'];
+          const vals: any[]    = [meta.title||'Untitled',meta.year||'',meta.medium||'',meta.dimensions||'',meta.status||'Private'];
+          if (imgUrl)   { sets.push('image_url=?');  vals.push(imgUrl); }
+          if (videoUrl) { sets.push('video_url=?');  vals.push(videoUrl); }
+          vals.push(meta.id);
+          db.prepare(`UPDATE artworks SET ${sets.join(',')}, updated_at=CURRENT_TIMESTAMP WHERE id=?`).run(...vals);
         } else {
-          // Insert new (only if has image)
-          if (imgUrl) {
+          // Insert new (only if has a file)
+          if (hasNew) {
             db.prepare(`
-              INSERT INTO artworks (title,artist_id,artist,year,medium,dimensions,status,sort_order,image_url)
-              VALUES (?,?,?,?,?,?,?,?,?)
+              INSERT INTO artworks (title,artist_id,artist,year,medium,dimensions,status,sort_order,image_url,video_url)
+              VALUES (?,?,?,?,?,?,?,?,?,?)
             `).run(
               meta.title || 'Untitled', id, name.trim(),
               meta.year || '', meta.medium || '', meta.dimensions || '',
               meta.status || 'Private', i,
-              imgUrl,
+              imgUrl, videoUrl,
             );
           }
         }

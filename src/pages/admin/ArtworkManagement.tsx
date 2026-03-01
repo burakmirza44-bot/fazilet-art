@@ -15,12 +15,14 @@ interface ArtworkDraft {
   uid: string;           // geçici frontend ID
   id?: number;           // DB ID (edit modunda)
   file: File | null;
-  preview: string;       // object URL veya mevcut image_url
+  preview: string;       // object URL veya mevcut image_url/video_url
   title: string;
   year: string;
   medium: string;
   dimensions: string;
   status: 'Public' | 'Private';
+  video_url?: string;    // mevcut video URL (edit modunda)
+  isVideo?: boolean;     // bu eser bir video mu?
 }
 
 interface Artist {
@@ -317,9 +319,26 @@ function ArtworkCard({
       gap: 0, position: 'relative',
     }}>
       {/* Thumbnail */}
-      <div style={{ background: '#f0f0f0', overflow: 'hidden', minHeight: 120 }}>
-        <img src={aw.preview} alt=""
-          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+      <div style={{ background: '#f0f0f0', overflow: 'hidden', minHeight: 120, position: 'relative' }}>
+        {aw.isVideo || aw.video_url ? (
+          <>
+            <video
+              src={aw.preview || aw.video_url}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+              muted playsInline preload="metadata"
+            />
+            <div style={{
+              position: 'absolute', inset: 0, display: 'flex',
+              alignItems: 'center', justifyContent: 'center',
+              background: 'rgba(0,0,0,0.25)',
+            }}>
+              <span style={{ fontSize: 22, lineHeight: 1 }}>▶</span>
+            </div>
+          </>
+        ) : (
+          <img src={aw.preview} alt=""
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+        )}
       </div>
 
       {/* Fields */}
@@ -364,9 +383,13 @@ function DropZone({ onFiles }: { onFiles: (files: File[]) => void }) {
   const [drag, setDrag] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const ACCEPTED = 'image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime';
+
   const handle = async (files: FileList | null) => {
     if (!files) return;
-    onFiles(Array.from(files).filter(f => f.type.startsWith('image/')));
+    onFiles(Array.from(files).filter(f =>
+      f.type.startsWith('image/') || f.type.startsWith('video/')
+    ));
   };
 
   const onDrop = (e: DragEvent) => {
@@ -390,13 +413,13 @@ function DropZone({ onFiles }: { onFiles: (files: File[]) => void }) {
       <div style={{ fontFamily: PX, fontSize: 9, letterSpacing: '0.35em',
         textTransform: 'uppercase', color: '#bbb', lineHeight: 2.2 }}>
         <div style={{ fontSize: 28, marginBottom: 4, color: '#ccc' }}>+</div>
-        Drop artwork images here
+        Görsel veya Video sürükleyin
         <br />
-        <span style={{ color: '#d8d8d8' }}>or click to browse — JPG, PNG, WEBP</span>
+        <span style={{ color: '#d8d8d8' }}>ya da tıklayın — JPG, PNG, WEBP, MP4, WEBM</span>
         <br />
-        <span style={{ color: '#ddd', fontSize: 8 }}>Multiple files supported</span>
+        <span style={{ color: '#ddd', fontSize: 8 }}>Birden fazla dosya desteklenir</span>
       </div>
-      <input ref={inputRef} type="file" accept="image/*" multiple style={{ display: 'none' }}
+      <input ref={inputRef} type="file" accept={ACCEPTED} multiple style={{ display: 'none' }}
         onChange={e => handle(e.target.files)} />
     </div>
   );
@@ -431,14 +454,16 @@ function ArtistDrawer({
   useEffect(() => {
     if (!artist) return;
     apiFetch(`/api/artists/${artist.id}`)
-      .then(r => r.json())
       .then(data => {
         const existing: ArtworkDraft[] = (data.artworks || []).map((aw: any) => ({
           uid: uid(), id: aw.id,
-          file: null, preview: aw.image_url || '',
+          file: null,
+          preview: aw.image_url || aw.video_url || '',
           title: aw.title || '', year: aw.year || '',
           medium: aw.medium || '', dimensions: aw.dimensions || '',
           status: aw.status === 'Public' ? 'Public' : 'Private',
+          video_url: aw.video_url || '',
+          isVideo: !!(aw.video_url && !aw.image_url),
         }));
         setArtworks(existing);
       });
@@ -454,12 +479,17 @@ function ArtistDrawer({
 
   const handleDroppedFiles = useCallback(async (files: File[]) => {
     const newAws: ArtworkDraft[] = await Promise.all(
-      files.map(async f => ({
-        uid: uid(), file: f, preview: await fileToPreview(f),
-        title: f.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' '),
-        year: String(new Date().getFullYear()),
-        medium: '', dimensions: '', status: 'Private' as const,
-      }))
+      files.map(async f => {
+        const isVid = f.type.startsWith('video/');
+        const preview = isVid ? URL.createObjectURL(f) : await fileToPreview(f);
+        return {
+          uid: uid(), file: f, preview,
+          title: f.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' '),
+          year: String(new Date().getFullYear()),
+          medium: '', dimensions: '', status: 'Private' as const,
+          isVideo: isVid,
+        };
+      })
     );
     setArtworks(prev => [...prev, ...newAws]);
   }, []);
@@ -499,7 +529,8 @@ function ArtistDrawer({
       fd.append('artworks', JSON.stringify(meta));
 
       artworks.forEach((a, i) => {
-        if (a.file) fd.append(`artwork_image_${i}`, a.file);
+        if (a.file && !a.isVideo) fd.append(`artwork_image_${i}`, a.file);
+        if (a.file && a.isVideo)  fd.append(`artwork_video_${i}`, a.file);
       });
 
       await apiFetch('/api/artists/full', { method: 'POST', body: fd });
