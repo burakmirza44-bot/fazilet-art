@@ -43,7 +43,17 @@ const ORIGIN = window.location.origin;
 
 // ─── Helpers ─────────────────────────────────────────────
 async function apiFetch(url: string, opts?: RequestInit) {
-  const r = await fetch(url, opts);
+  const token = localStorage.getItem('admin_token');
+  const headers: Record<string, string> = {
+    ...((opts?.headers as Record<string, string>) ?? {}),
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const r = await fetch(url, { ...opts, headers });
+  if (r.status === 401) {
+    localStorage.removeItem('admin_token');
+    window.location.href = '/admin/login';
+    throw new Error('Oturum süresi doldu');
+  }
   if (!r.ok) {
     const err = await r.json().catch(() => ({ error: r.statusText }));
     throw new Error(err.error || 'API error');
@@ -282,7 +292,7 @@ function ArtistDrawer({
   // Edit: mevcut eserleri yükle
   useEffect(() => {
     if (!artist) return;
-    fetch(`/api/artists/${artist.id}`)
+    apiFetch(`/api/artists/${artist.id}`)
       .then(r => r.json())
       .then(data => {
         const existing: ArtworkDraft[] = (data.artworks || []).map((aw: any) => ({
@@ -588,7 +598,7 @@ export default function ArtistManagement() {
       is_featured: field === 'is_featured' ? (cur ? 0 : 1) : artist.is_featured,
     };
     setArtists(prev => prev.map(a => a.id === id ? { ...a, ...payload } : a));
-    await fetch(`/api/artists/${id}/publish`, {
+    await apiFetch(`/api/artists/${id}/publish`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),

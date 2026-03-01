@@ -2,6 +2,7 @@
  * AdminViewingRooms.tsx
  * Viewing Room kürasyon: hangi eserler görüntüleme odasında gösterilecek?
  */
+import { apiFetch } from '../../utils/api';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MonitorPlay, ImageIcon, Check, ExternalLink } from 'lucide-react';
@@ -49,8 +50,8 @@ export default function AdminViewingRooms() {
   const load = () => {
     setLoading(true);
     Promise.all([
-      fetch('/api/artworks').then(r => r.json()),
-      fetch('/api/artists?limit=200&sort=name').then(r => r.json()),
+      apiFetch('/api/artworks').then(r => r.json()),
+      apiFetch('/api/artists?limit=200&sort=name').then(r => r.json()),
     ]).then(([aw, ar]) => {
       const awList = Array.isArray(aw) ? aw : (aw.data ?? []);
       const arList = Array.isArray(ar) ? ar : (ar.data ?? []);

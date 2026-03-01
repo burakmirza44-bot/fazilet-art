@@ -4,6 +4,7 @@
  * status toggle ve silme işlemleri yapılabilir.
  */
 
+import { apiFetch } from '../../utils/api';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -59,8 +60,8 @@ export default function ArtworksList() {
     setLoading(true);
     try {
       const [awRes, arRes] = await Promise.all([
-        fetch('/api/artworks'),
-        fetch('/api/artists?limit=200&sort=name'),
+        apiFetch('/api/artworks'),
+        apiFetch('/api/artists?limit=200&sort=name'),
       ]);
       const awData = await awRes.json();
       const arData = await arRes.json();

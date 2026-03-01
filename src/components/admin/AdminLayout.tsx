@@ -1,27 +1,43 @@
-import { Link, Outlet, useLocation } from 'react-router-dom';
+import { Link, Outlet, useLocation, Navigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Image as ImageIcon,
   BookOpen,
-  MonitorPlay,
   Settings,
   ExternalLink,
   Users,
   CalendarDays,
   UserCog,
+  LogOut,
+  Loader2,
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 export default function AdminLayout() {
   const location = useLocation();
+  const { user, loading, logout } = useAuth();
+
+  // Token doğrulanıyor
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f9f9f9]">
+        <Loader2 size={22} className="animate-spin text-ink/30" />
+      </div>
+    );
+  }
+
+  // Giriş yapılmamış → login'e yönlendir
+  if (!user) {
+    return <Navigate to="/admin/login" state={{ from: location }} replace />;
+  }
 
   const navItems = [
-    { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
-    { name: 'Artworks', path: '/admin/artworks', icon: ImageIcon },
-    { name: 'Artists & Links', path: '/admin/artists', icon: Users },
-    { name: 'Publications', path: '/admin/publications', icon: BookOpen },
-    { name: 'Exhibitions',   path: '/admin/exhibitions',   icon: CalendarDays },
-    { name: 'Viewing Rooms', path: '/admin/viewing-rooms', icon: MonitorPlay },
-    { name: 'Users',         path: '/admin/users',         icon: UserCog },
+    { name: 'Dashboard',       path: '/admin',              icon: LayoutDashboard },
+    { name: 'Artworks',        path: '/admin/artworks',     icon: ImageIcon },
+    { name: 'Artists & Links', path: '/admin/artists',      icon: Users },
+    { name: 'Publications',    path: '/admin/publications',  icon: BookOpen },
+    { name: 'Exhibitions',     path: '/admin/exhibitions',   icon: CalendarDays },
+    { name: 'Users',           path: '/admin/users',         icon: UserCog },
   ];
 
   return (
@@ -34,19 +50,18 @@ export default function AdminLayout() {
           </Link>
         </div>
 
-        <nav className="flex-1 px-4 py-6 space-y-1">
+        <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
-            const isActive = location.pathname === item.path || 
+            const isActive = location.pathname === item.path ||
                              (item.path !== '/admin' && location.pathname.startsWith(item.path));
             const Icon = item.icon;
-            
             return (
               <Link
                 key={item.name}
                 to={item.path}
                 className={`flex items-center space-x-3 px-4 py-3 rounded-md transition-colors duration-200 ${
-                  isActive 
-                    ? 'bg-ink/5 text-ink font-medium' 
+                  isActive
+                    ? 'bg-ink/5 text-ink font-medium'
                     : 'text-ink/60 hover:bg-ink/5 hover:text-ink'
                 }`}
               >
@@ -58,6 +73,12 @@ export default function AdminLayout() {
         </nav>
 
         <div className="p-4 border-t border-ink/5 space-y-1">
+          {/* Kullanıcı bilgisi */}
+          <div className="px-4 py-3 mb-1">
+            <p className="text-xs font-medium text-ink truncate">{user.name}</p>
+            <p className="text-[10px] text-ink/40 tracking-wider uppercase">{user.role}</p>
+          </div>
+
           <a
             href="/"
             target="_blank"
@@ -67,6 +88,15 @@ export default function AdminLayout() {
             <ExternalLink size={18} strokeWidth={1.5} />
             <span className="text-sm tracking-wide">View Site</span>
           </a>
+
+          <button
+            onClick={logout}
+            className="flex items-center space-x-3 px-4 py-3 w-full text-left rounded-md text-ink/60 hover:bg-red-50 hover:text-red-600 transition-colors duration-200"
+          >
+            <LogOut size={18} strokeWidth={1.5} />
+            <span className="text-sm tracking-wide">Çıkış Yap</span>
+          </button>
+
           <button className="flex items-center space-x-3 px-4 py-3 w-full text-left rounded-md text-ink/60 hover:bg-ink/5 hover:text-ink transition-colors duration-200">
             <Settings size={18} strokeWidth={1.5} />
             <span className="text-sm tracking-wide">Settings</span>

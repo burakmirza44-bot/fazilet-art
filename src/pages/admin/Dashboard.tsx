@@ -1,3 +1,4 @@
+import { apiFetch } from '../../utils/api';
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
@@ -81,8 +82,8 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/stats').then(r => r.ok ? r.json() : null),
-      fetch('/api/artworks').then(r => r.ok ? r.json() : []),
+      apiFetch('/api/stats').then(r => r.ok ? r.json() : null),
+      apiFetch('/api/artworks').then(r => r.ok ? r.json() : []),
     ]).then(([s, aw]) => {
       if (s) setStats(s);
       const list = Array.isArray(aw) ? aw : (aw.data ?? []);

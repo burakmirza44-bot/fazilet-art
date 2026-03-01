@@ -1,3 +1,4 @@
+import { apiFetch } from '../../utils/api';
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, X, Check, Trash2, UploadCloud, Calendar, MapPin, Edit2, Eye, EyeOff } from 'lucide-react';
@@ -45,7 +46,7 @@ export default function AdminExhibitions() {
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/exhibitions');
+      const res = await apiFetch('/api/exhibitions');
       if (res.ok) setExhibitions(await res.json());
     } finally { setLoading(false); }
   };

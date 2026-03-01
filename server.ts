@@ -225,6 +225,60 @@ const uploadPub = multer({
   { name: 'file',    maxCount: 1 },
 ]);
 
+// ─── Auth (session token — no extra packages) ─────────────
+const JWT_SECRET  = process.env.JWT_SECRET  || crypto.randomBytes(32).toString('hex');
+const SESSION_TTL = 24 * 60 * 60 * 1000; // 24 saat
+
+// { token → { userId, email, role, expiresAt } }
+const sessions = new Map<string, { userId: number; email: string; role: string; expiresAt: number }>();
+
+const createSession = (userId: number, email: string, role: string) => {
+  const token = crypto.randomBytes(32).toString('hex');
+  sessions.set(token, { userId, email, role, expiresAt: Date.now() + SESSION_TTL });
+  return token;
+};
+
+// Süresi dolmuş oturumları temizle (5 dakikada bir)
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of sessions) if (v.expiresAt < now) sessions.delete(k);
+}, 5 * 60 * 1000);
+
+// requireAuth middleware
+const requireAuth = (req: Request, res: Response, next: NextFunction) => {
+  const header = req.headers.authorization ?? '';
+  const token  = header.startsWith('Bearer ') ? header.slice(7) : '';
+  const sess   = sessions.get(token);
+  if (!sess || sess.expiresAt < Date.now()) {
+    sessions.delete(token);
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  (req as any).user = sess;
+  next();
+};
+
+// requireAdmin middleware (role=admin şart)
+const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
+  requireAuth(req, res, () => {
+    if ((req as any).user?.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+    next();
+  });
+};
+
+// ─── Rate Limiting (in-memory, paket gerekmez) ────────────
+const rateLimitMap = new Map<string, { count: number; reset: number }>();
+const rateLimit = (maxReqs: number, windowMs: number) =>
+  (req: Request, res: Response, next: NextFunction) => {
+    const key = req.ip ?? 'unknown';
+    const now = Date.now();
+    const entry = rateLimitMap.get(key) ?? { count: 0, reset: now + windowMs };
+    if (now > entry.reset) { entry.count = 0; entry.reset = now + windowMs; }
+    entry.count++;
+    rateLimitMap.set(key, entry);
+    if (entry.count > maxReqs) return res.status(429).json({ error: 'Too many requests' });
+    next();
+  };
+
 // ─── Express ─────────────────────────────────────────────
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -233,11 +287,14 @@ app.use('/uploads', express.static(UPLOADS_DIR));
 // Geriye dönük uyumluluk: /data/uploads da aynı klasörü sunar
 app.use('/data/uploads', express.static(UPLOADS_DIR));
 
-// CORS (dev)
+// CORS — production'da gerçek domain'e kısıt
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '*';
 app.use((_req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin',  '*');
+  const origin = _req.headers.origin ?? '';
+  const allow  = ALLOWED_ORIGIN === '*' ? '*' : (origin === ALLOWED_ORIGIN ? origin : '');
+  res.setHeader('Access-Control-Allow-Origin',  allow || ALLOWED_ORIGIN);
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
   if (_req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
@@ -246,6 +303,59 @@ app.use((_req, res, next) => {
 app.use((req, _res, next) => {
   process.stdout.write(`[${new Date().toISOString()}] ${req.method} ${req.path}\n`);
   next();
+});
+
+// ─── AUTH ─────────────────────────────────────────────────
+
+// POST /api/auth/login
+app.post('/api/auth/login', rateLimit(10, 60_000), (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'Email ve şifre gerekli' });
+
+    const user = db.prepare(`SELECT * FROM users WHERE email=? AND active=1`).get(email.toLowerCase()) as any;
+    if (!user) return res.status(401).json({ error: 'Geçersiz kimlik bilgileri' });
+
+    const hash = hashPw(password, user.salt);
+    if (hash !== user.password_hash) return res.status(401).json({ error: 'Geçersiz kimlik bilgileri' });
+
+    const token = createSession(user.id, user.email, user.role);
+    res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+  } catch (e) { next(e); }
+});
+
+// GET /api/auth/me
+app.get('/api/auth/me', requireAuth, (req: Request, res: Response) => {
+  const sess = (req as any).user;
+  const user = db.prepare(`SELECT id,name,email,role FROM users WHERE id=?`).get(sess.userId) as any;
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  res.json(user);
+});
+
+// POST /api/auth/logout
+app.post('/api/auth/logout', (req: Request, res: Response) => {
+  const header = req.headers.authorization ?? '';
+  const token  = header.startsWith('Bearer ') ? header.slice(7) : '';
+  sessions.delete(token);
+  res.json({ message: 'Logged out' });
+});
+
+// ── Tüm admin API rotaları için blanket koruma ────────────
+// Bu middleware auth endpoint'lerinden SONRA, diğer tüm route'lardan ÖNCE tanımlanır.
+// app.use('/api', fn) içinde req.path, /api prefix'i olmadan gelir:
+//   /api/stats     → /stats
+//   /api/artists/public → /artists/public
+const PUBLIC_PATHS: { method: string; re: RegExp }[] = [
+  { method: 'GET',  re: /^\/stats$/ },
+  { method: 'GET',  re: /^\/artists\/public/ },
+  { method: 'GET',  re: /^\/artists\/private\// },
+  { method: 'GET',  re: /^\/exhibitions\/public/ },
+];
+
+app.use('/api', (req: Request, res: Response, next: NextFunction) => {
+  const isPublic = PUBLIC_PATHS.some(p => p.method === req.method && p.re.test(req.path));
+  if (isPublic) return next();
+  return requireAuth(req, res, next);
 });
 
 // ─── STATS ───────────────────────────────────────────────

@@ -1,3 +1,4 @@
+import { apiFetch } from '../../utils/api';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -185,7 +186,7 @@ export default function AdminArtists() {
 
   const fetchArtists = async () => {
     try {
-      const res = await fetch('/api/artists');
+      const res = await apiFetch('/api/artists');
       if (res.ok) {
         const data = await res.json();
         setArtists(Array.isArray(data) ? data : (data.data ?? []));
@@ -271,7 +272,7 @@ export default function AdminArtists() {
       }))));
       fd.append('deletedArtworks', JSON.stringify(deleted));
 
-      const res = await fetch('/api/artists/full', { method: 'POST', body: fd });
+      const res = await apiFetch('/api/artists/full', { method: 'POST', body: fd });
       if (res.ok) { resetForm(); await fetchArtists(); setView('list'); }
       else alert('Failed to save artist');
     } catch (e) { console.error(e); alert('An error occurred'); }

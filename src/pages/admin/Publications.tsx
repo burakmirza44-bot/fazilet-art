@@ -2,6 +2,7 @@
  * Publications.tsx — Admin
  * Yayın yönetimi: katalog, dergi, basın
  */
+import { apiFetch } from '../../utils/api';
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, BookOpen, ExternalLink, Trash2, Edit2 } from 'lucide-react';
@@ -220,7 +221,7 @@ export default function Publications() {
 
   const load = () => {
     setLoading(true);
-    fetch('/api/publications')
+    apiFetch('/api/publications')
       .then(r => r.json())
       .then(data => { setPubs(Array.isArray(data) ? data : []); setLoading(false); })
       .catch(() => setLoading(false));

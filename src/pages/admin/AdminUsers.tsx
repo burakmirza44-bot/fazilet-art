@@ -2,6 +2,7 @@
  * AdminUsers.tsx — Kullanıcı Yönetim Paneli
  * Kullanıcı oluşturma, düzenleme, rol atama, şifre değiştirme, silme
  */
+import { apiFetch } from '../../utils/api';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -150,7 +151,7 @@ export default function AdminUsers() {
   // ── Yükleme ──────────────────────────────────────────────
   const fetchUsers = () => {
     setLoading(true);
-    fetch('/api/users')
+    apiFetch('/api/users')
       .then(r => r.json())
       .then(data => { setUsers(data); setLoading(false); })
       .catch(() => { setError('Kullanıcılar yüklenemedi.'); setLoading(false); });
@@ -164,7 +165,7 @@ export default function AdminUsers() {
     if (form.password !== form.confirm) { setFormErr('Şifreler eşleşmiyor.'); return; }
     if (form.password.length < 6)       { setFormErr('Şifre en az 6 karakter olmalı.'); return; }
     setSaving(true);
-    const res = await fetch('/api/users', {
+    const res = await apiFetch('/api/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: form.name, email: form.email, role: form.role, password: form.password }),

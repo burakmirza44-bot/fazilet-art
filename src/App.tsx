@@ -11,6 +11,7 @@ import Exhibitions from './pages/Exhibitions';
 import Contact from './pages/Contact';
 
 // Admin Imports
+import AdminLogin  from './pages/admin/AdminLogin';
 import AdminLayout from './components/admin/AdminLayout';
 import AdminDashboard from './pages/admin/Dashboard';
 import ArtistManagement from './pages/admin/ArtworkManagement';
@@ -22,6 +23,7 @@ import AdminUsers       from './pages/admin/AdminUsers';
 
 // Private/Unlisted Imports
 import PrivateArtistView from './pages/PrivateArtistView';
+import NotFound from './pages/NotFound';
 
 export default function App() {
   return (
@@ -38,7 +40,10 @@ export default function App() {
         {/* Private/Unlisted Routes (No global layout/navigation) */}
         <Route path="/shared/artist/:id" element={<PrivateArtistView />} />
 
-        {/* Admin Routes */}
+        {/* Admin Login (korumasız) */}
+        <Route path="/admin/login" element={<AdminLogin />} />
+
+        {/* Admin Routes (AdminLayout içinde auth kontrolü var) */}
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} />
           <Route path="artworks" element={<ArtworkManagement />} />
@@ -48,6 +53,8 @@ export default function App() {
           <Route path="exhibitions"    element={<AdminExhibitions />} />
           <Route path="users"          element={<AdminUsers />} />
         </Route>
+        {/* 404 — catch-all */}
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </Router>
   );
