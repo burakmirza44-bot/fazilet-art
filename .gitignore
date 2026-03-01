@@ -1,0 +1,13 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+# Yerel geliştirme veritabanı ve yüklemeler (Railway volume'da yaşar)
+data/
+gallery.db
+uploads/

@@ -1,0 +1,128 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,300;0,6..12,400;0,6..12,600&display=swap');
+@import "tailwindcss";
+
+/* ── Tailwind v4 dark mode — html.dark sınıfına göre ─────────────────────── */
+@variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "proxima-nova", "Nunito Sans", "Gill Sans MT", sans-serif;
+  --font-serif: "proxima-nova", "Nunito Sans", "Gill Sans MT", sans-serif;
+  --color-ink: #1A1A1A;
+  --color-paper: #FFFFFF;
+}
+
+/* ── Renk değişkenleri ───────────────────────────────────────────────────── */
+:root {
+  --c-bg:       #ffffff;
+  --c-bg-2:     #f7f7f7;
+  --c-ink:      #111111;
+  --c-ink-2:    rgba(17,17,17,0.65);
+  --c-ink-3:    rgba(17,17,17,0.35);
+  --c-border:   rgba(0,0,0,0.07);
+  --c-hdr-bg:   rgba(255,255,255,0.94);
+  color-scheme: light;
+}
+
+html.dark {
+  --c-bg:       #0e0e0e;
+  --c-bg-2:     #1a1a1a;
+  --c-ink:      #e0e0e0;
+  --c-ink-2:    rgba(224,224,224,0.60);
+  --c-ink-3:    rgba(224,224,224,0.30);
+  --c-border:   rgba(255,255,255,0.07);
+  --c-hdr-bg:   rgba(14,14,14,0.94);
+  color-scheme: dark;
+}
+
+@layer base {
+  body {
+    @apply bg-paper text-ink font-sans antialiased selection:bg-ink selection:text-paper;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-sans tracking-tight;
+  }
+}
+
+/* ── Tema geçiş animasyonu ───────────────────────────────────────────────── */
+html, body {
+  transition: background-color 0.35s ease, color 0.35s ease;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   dm-page: inline style kullanan içerik sayfaları için dark mode katmanı
+
+   CSS cascade: !important author declarations > normal inline styles
+   Bu sayede style={{ color:'#111' }} gibi inline stilleri ezeriz.
+   ─────────────────────────────────────────────────────────────────────── */
+
+/* 1. Kök element — arka plan + metin rengi */
+html.dark .dm-page {
+  background: var(--c-bg) !important;
+  color: var(--c-ink) !important;
+}
+
+/* 2. Başlıklar */
+html.dark .dm-page h1,
+html.dark .dm-page h2,
+html.dark .dm-page h3,
+html.dark .dm-page h4,
+html.dark .dm-page h5,
+html.dark .dm-page h6 {
+  color: var(--c-ink) !important;
+}
+
+/* 3. Artists sayfası — sanatçı isimleri ve çizgileri */
+html.dark .dm-page .artist-name-text {
+  color: var(--c-ink) !important;
+}
+html.dark .dm-page .artist-underline {
+  background: rgba(224,224,224,0.6) !important;
+}
+html.dark .dm-page .artist-list-link span:first-child {
+  color: var(--c-ink) !important;
+}
+
+/* 4. Contact formu */
+html.dark .contact-input {
+  color: var(--c-ink) !important;
+  border-bottom-color: rgba(255,255,255,0.12) !important;
+}
+html.dark .contact-input::placeholder {
+  color: var(--c-ink-3) !important;
+}
+html.dark .contact-input:focus {
+  border-bottom-color: rgba(255,255,255,0.35) !important;
+  outline: none;
+}
+
+/* 5. Bölücü çizgiler ve border'lar (rgba siyah) */
+html.dark .dm-page [style*="border-bottom"],
+html.dark .dm-page [style*="border-top"] {
+  border-color: var(--c-border) !important;
+}
+
+/* 6. Exhibitions — büyük başlık */
+html.dark .dm-page .exhibitions-wrap h1,
+html.dark .dm-page .exhibitions-wrap h2 {
+  color: var(--c-ink) !important;
+}
+
+/* 7. Açık gri arka planlar */
+html.dark .dm-page [style*="background: #f"],
+html.dark .dm-page [style*="background:#f"] {
+  background: var(--c-bg-2) !important;
+}
+
+/* 8. Koyu arka planlar (beyaz olmayan kartlar vb.) */
+html.dark .dm-page [style*="background: rgba(0,0,0"] {
+  background: rgba(255,255,255,0.04) !important;
+}
+
+/* 9. Select elemanı */
+html.dark .dm-page select {
+  background: var(--c-bg-2) !important;
+  color: var(--c-ink) !important;
+  border-color: var(--c-border) !important;
+}
