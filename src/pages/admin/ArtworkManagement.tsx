@@ -130,9 +130,9 @@ function Toggle({ on, onToggle, labelOn, labelOff, colorOn = '#111' }: {
 }
 
 // ─── Private link row ────────────────────────────────────
-function PrivateLinkRow({ artistId, onRegenerate }: { artistId: string; onRegenerate: () => void }) {
+function PrivateLinkRow({ token, onRegenerate }: { token: string; onRegenerate: () => void }) {
   const [copied, setCopied] = useState(false);
-  const link = `${ORIGIN}/shared/artist/${artistId}`;
+  const link = `${ORIGIN}/shared/artist/${token}`;
 
   const copy = () => {
     navigator.clipboard.writeText(link).then(() => {
@@ -781,9 +781,9 @@ export default function ArtistManagement() {
 
                 {/* Private link */}
                 <div style={{ overflow: 'hidden' }}>
-                  {artist.id ? (
+                  {artist.private_token ? (
                     <PrivateLinkRow
-                      artistId={artist.id}
+                      token={artist.private_token}
                       onRegenerate={() => regenerateToken(artist.id)}
                     />
                   ) : (
