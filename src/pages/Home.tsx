@@ -325,7 +325,7 @@ export default function Home() {
   const [error,   setError]   = useState(false);
 
   useEffect(() => {
-    fetch('/api/artists?featured=true&limit=5&sort=name')
+    fetch('/api/artists/public?featured=true&limit=5&sort=name')
       .then(r => {
         if (!r.ok) throw new Error('API error');
         return r.json();
