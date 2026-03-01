@@ -129,36 +129,174 @@ function Toggle({ on, onToggle, labelOn, labelOff, colorOn = '#111' }: {
   );
 }
 
-// ─── Private link row ────────────────────────────────────
-function PrivateLinkRow({ token, onRegenerate }: { token: string; onRegenerate: () => void }) {
-  const [copied, setCopied] = useState(false);
+// ─── Private link modal ──────────────────────────────────
+function PrivateLinkModal({ token, artistName, onClose, onRegenerate }: {
+  token: string; artistName: string;
+  onClose: () => void; onRegenerate: () => Promise<void>;
+}) {
+  const [copied,       setCopied]       = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
   const link = `${ORIGIN}/shared/artist/${token}`;
 
   const copy = () => {
     navigator.clipboard.writeText(link).then(() => {
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => setCopied(false), 2200);
     });
   };
 
+  const regen = async () => {
+    if (!confirm('Yeni link oluşturulacak. Eski link artık çalışmayacak. Devam edilsin mi?')) return;
+    setRegenerating(true);
+    await onRegenerate();
+    setRegenerating(false);
+  };
+
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 8,
-      background: '#f5f5f5', border: '1px solid #e8e8e8',
-      padding: '8px 12px', marginTop: 10,
-    }}>
-      <span style={{ fontFamily: 'monospace', fontSize: 10, color: '#666', flex: 1,
-        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {link}
-      </span>
-      <button onClick={copy} style={BTN(copied ? '#2d7a2d' : '#111')}>
-        {copied ? '✓ Copied' : 'Copy Link'}
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 200,
+        background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(6px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+      }}
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 16 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: 8 }}
+        transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+        style={{
+          background: '#fff', width: '100%', maxWidth: 480,
+          boxShadow: '0 20px 60px rgba(0,0,0,0.18)',
+          fontFamily: PX,
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{ padding: '22px 28px 18px', borderBottom: '1px solid #f0f0f0',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <p style={{ fontFamily: PX, fontSize: 13, fontWeight: 400, color: '#111', margin: 0 }}>
+              {artistName}
+            </p>
+            <p style={{ fontFamily: PX, fontSize: 9, letterSpacing: '0.25em',
+              textTransform: 'uppercase', color: '#bbb', margin: '4px 0 0' }}>
+              Private Portfolio Link
+            </p>
+          </div>
+          <button onClick={onClose} style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            fontSize: 20, color: '#ccc', lineHeight: 1, padding: 4,
+          }}>×</button>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: '24px 28px 28px' }}>
+          {/* Green info */}
+          <div style={{
+            background: '#f0fdf4', border: '1px solid #bbf7d0',
+            padding: '10px 14px', marginBottom: 20, display: 'flex', gap: 10,
+          }}>
+            <span style={{ color: '#16a34a', fontSize: 13 }}>🔒</span>
+            <p style={{ fontFamily: PX, fontSize: 10, color: '#15803d', margin: 0, lineHeight: 1.6 }}>
+              Bu link, sanatçının sayfası gizli olsa bile çalışır. Yalnızca müşterilerinizle paylaşın.
+            </p>
+          </div>
+
+          {/* URL row */}
+          <div style={{ marginBottom: 16 }}>
+            <p style={{ fontFamily: PX, fontSize: 8, letterSpacing: '0.3em',
+              textTransform: 'uppercase', color: '#bbb', margin: '0 0 8px' }}>Paylaşım Linki</p>
+            <div style={{ display: 'flex', border: '1px solid #e8e8e8', overflow: 'hidden' }}>
+              <div style={{
+                flex: 1, padding: '10px 12px',
+                fontFamily: 'monospace', fontSize: 11, color: '#666',
+                background: '#fafafa', overflow: 'hidden',
+                textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {link}
+              </div>
+              <button onClick={copy} style={{
+                padding: '10px 16px', border: 'none', borderLeft: '1px solid #e8e8e8',
+                background: copied ? '#f0fdf4' : '#fff',
+                color: copied ? '#16a34a' : '#555',
+                fontFamily: PX, fontSize: 10, letterSpacing: '0.15em',
+                cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all 0.2s',
+                fontWeight: 400,
+              }}>
+                {copied ? '✓ Kopyalandı' : 'Kopyala'}
+              </button>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <a href={link} target="_blank" rel="noopener noreferrer" style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              padding: '10px 0', border: '1px solid #e0e0e0',
+              fontFamily: PX, fontSize: 9, letterSpacing: '0.2em',
+              textTransform: 'uppercase', color: '#555', textDecoration: 'none',
+              transition: 'background 0.15s',
+            }}>
+              ↗ Önizle
+            </a>
+            <button onClick={regen} disabled={regenerating} style={{
+              padding: '10px 0', border: '1px solid #fde68a',
+              background: regenerating ? '#fef9c3' : '#fffbeb',
+              fontFamily: PX, fontSize: 9, letterSpacing: '0.2em',
+              textTransform: 'uppercase', color: '#b45309',
+              cursor: regenerating ? 'default' : 'pointer', transition: 'all 0.15s',
+            }}>
+              {regenerating ? '…' : '↻ Yeni Link'}
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ─── Private link button ──────────────────────────────────
+function PrivateLinkRow({ token, artistName, onRegenerate }: {
+  token: string; artistName: string; onRegenerate: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const handleRegen = async () => {
+    onRegenerate();
+    // Give a small delay so the parent state updates, then the modal token refreshes
+    await new Promise(r => setTimeout(r, 600));
+  };
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        style={{
+          background: '#f5f5f5', border: '1px solid #e0e0e0',
+          padding: '7px 14px', cursor: 'pointer',
+          fontFamily: PX, fontSize: 9, letterSpacing: '0.2em',
+          textTransform: 'uppercase', color: '#555',
+          transition: 'all 0.15s', display: 'inline-flex', alignItems: 'center', gap: 6,
+        }}
+        onMouseEnter={e => { e.currentTarget.style.background = '#111'; e.currentTarget.style.color = '#fff'; }}
+        onMouseLeave={e => { e.currentTarget.style.background = '#f5f5f5'; e.currentTarget.style.color = '#555'; }}
+      >
+        🔗 Link
       </button>
-      <button onClick={onRegenerate} style={BTN('transparent', '#999', '#ddd')}
-        title="Regenerate token (old link will stop working)">
-        ↻ New Link
-      </button>
-    </div>
+      <AnimatePresence>
+        {open && (
+          <PrivateLinkModal
+            token={token}
+            artistName={artistName}
+            onClose={() => setOpen(false)}
+            onRegenerate={handleRegen}
+          />
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 
@@ -784,6 +922,7 @@ export default function ArtistManagement() {
                   {artist.private_token ? (
                     <PrivateLinkRow
                       token={artist.private_token}
+                      artistName={artist.name}
                       onRegenerate={() => regenerateToken(artist.id)}
                     />
                   ) : (
