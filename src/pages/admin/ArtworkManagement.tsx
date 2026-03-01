@@ -551,10 +551,10 @@ function ArtistDrawer({
 
       {/* Panel */}
       <motion.div
-        initial={{ x: 640 }} animate={{ x: 0 }} exit={{ x: 640 }}
+        initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
         transition={{ type: 'spring', stiffness: 300, damping: 32 }}
         style={{
-          width: 640, height: '100%', overflowY: 'auto',
+          width: 'min(640px, 100vw)', height: '100%', overflowY: 'auto',
           background: '#fafafa', display: 'flex', flexDirection: 'column',
           boxShadow: '-24px 0 80px rgba(0,0,0,0.14)',
         }}
@@ -812,9 +812,13 @@ export default function ArtistManagement() {
         .row:hover { background: #fafafa !important; }
         .act { opacity: 0; transition: opacity 0.18s; }
         .row:hover .act { opacity: 1; }
+        @media (max-width: 768px) {
+          .act { opacity: 1 !important; }
+          .row { min-width: 640px; }
+        }
       `}</style>
 
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '44px 32px 100px' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: 'clamp(20px, 4vw, 44px) clamp(16px, 3vw, 32px) 100px' }}>
 
         {/* Page header */}
         <div style={{
@@ -861,7 +865,7 @@ export default function ArtistManagement() {
         </div>
 
         {/* ── Artist rows ── */}
-        <div style={{ background: '#fff', border: '1px solid #e8e8e8' }}>
+        <div style={{ background: '#fff', border: '1px solid #e8e8e8', overflowX: 'auto' }}>
 
           {/* Table head */}
           <div style={{

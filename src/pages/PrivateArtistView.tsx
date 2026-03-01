@@ -157,6 +157,7 @@ function ArtworkViewer({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.28 }}
+      className="pav-viewer"
       style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', background: C.vBg, fontFamily: F, transition: 'background 0.35s ease' }}
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
@@ -189,7 +190,7 @@ function ArtworkViewer({
       </button>
 
       {/* ── Görsel / Video alanı ── */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '56px 64px', overflow: 'hidden' }}>
+      <div className="pav-viewer-img" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '56px 64px', overflow: 'hidden' }}>
         <AnimatePresence mode="wait" initial={false}>
           {aw.video_url ? (
             <motion.video
@@ -218,7 +219,7 @@ function ArtworkViewer({
       </div>
 
       {/* ── Sağ detay paneli ── */}
-      <div style={{
+      <div className="pav-viewer-panel" style={{
         width: 320, flexShrink: 0,
         background: C.vPanel,
         borderLeft: `1px solid ${C.vPanelBorder}`,
@@ -401,10 +402,29 @@ export default function PrivateArtistView() {
         .aw-card:hover .aw-card-img { transform: scale(1.05); }
         .aw-card { transition: opacity 0.25s; cursor: pointer; }
         .aw-card:hover { opacity: 0.88; }
+
+        /* ── Mobile ── */
+        @media (max-width: 768px) {
+          .pav-header       { padding: 14px 20px !important; }
+          .pav-confidential { display: none !important; }
+          .pav-profile      { padding: 40px 20px 36px !important; }
+          .pav-profile-grid { grid-template-columns: 1fr !important; gap: 0 !important; }
+          .pav-photo        { max-width: 220px; margin: 0 auto 32px; position: static !important; }
+          .pav-works        { padding: 0 20px 64px !important; }
+          .pav-grid         { grid-template-columns: repeat(2, 1fr) !important; gap: 28px 16px !important; }
+          .pav-footer       { padding: 20px !important; flex-direction: column !important; align-items: flex-start !important; }
+          .pav-viewer       { flex-direction: column !important; }
+          .pav-viewer-img   { flex: 1 !important; padding: 48px 16px 8px !important; }
+          .pav-viewer-panel { width: 100% !important; max-height: 38vh !important; border-left: none !important; border-top: 1px solid rgba(128,128,128,0.15) !important; padding: 20px !important; overflow-y: auto !important; flex-shrink: 0 !important; }
+          .pav-inquire      { display: none !important; }
+        }
+        @media (max-width: 400px) {
+          .pav-grid { grid-template-columns: 1fr !important; }
+        }
       `}</style>
 
       {/* ── HEADER ── */}
-      <header style={{
+      <header className="pav-header" style={{
         position: 'sticky', top: 0, zIndex: 20,
         background: C.hdrBg,
         backdropFilter: 'blur(12px)',
@@ -424,7 +444,7 @@ export default function PrivateArtistView() {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
           {/* Gizli etiket */}
-          <span style={{ fontSize: 8, letterSpacing: '0.5em', textTransform: 'uppercase', color: C.textFaint, fontWeight: 400 }}>
+          <span className="pav-confidential" style={{ fontSize: 8, letterSpacing: '0.5em', textTransform: 'uppercase', color: C.textFaint, fontWeight: 400 }}>
             Confidential Viewing
           </span>
 
@@ -434,6 +454,7 @@ export default function PrivateArtistView() {
           {/* Inquire butonu */}
           <a
             href="mailto:info@faziletsecgin.com"
+            className="pav-inquire"
             style={{
               fontFamily: F, fontSize: 9, letterSpacing: '0.38em', textTransform: 'uppercase',
               fontWeight: 400, color: C.btnColor, textDecoration: 'none',
@@ -449,8 +470,8 @@ export default function PrivateArtistView() {
       </header>
 
       {/* ── SANATÇI PROFİL ── */}
-      <section style={{ maxWidth: 1320, margin: '0 auto', padding: '80px 48px 72px' }}>
-        <div style={{
+      <section className="pav-profile" style={{ maxWidth: 1320, margin: '0 auto', padding: '80px 48px 72px' }}>
+        <div className="pav-profile-grid" style={{
           display: 'grid',
           gridTemplateColumns: artist.image_url ? '300px 1fr' : '1fr',
           gap: '0 80px',
@@ -460,6 +481,7 @@ export default function PrivateArtistView() {
           {/* Fotoğraf */}
           {artist.image_url && (
             <motion.div
+              className="pav-photo"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.8 }}
@@ -532,7 +554,7 @@ export default function PrivateArtistView() {
 
       {/* ── ESERLER ── */}
       {artworks.length > 0 && (
-        <section style={{ maxWidth: 1320, margin: '0 auto', padding: '0 48px 120px' }}>
+        <section className="pav-works" style={{ maxWidth: 1320, margin: '0 auto', padding: '0 48px 120px' }}>
 
           {/* Bölüm ayırıcı */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 24, marginBottom: 52 }}>
@@ -544,7 +566,7 @@ export default function PrivateArtistView() {
           </div>
 
           {/* Grid */}
-          <div style={{
+          <div className="pav-grid" style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
             gap: '56px 32px',
@@ -618,7 +640,7 @@ export default function PrivateArtistView() {
       )}
 
       {/* ── FOOTER ── */}
-      <footer style={{
+      <footer className="pav-footer" style={{
         borderTop: `1px solid ${C.hdrBorder}`,
         padding: '28px 48px',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12,

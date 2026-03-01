@@ -546,12 +546,12 @@ export default function Home() {
           }
 
           .home-section-pad {
-            padding: 56px 20px 72px !important;
+            padding: 48px 20px 64px !important;
           }
 
           .artists-grid {
             grid-template-columns: repeat(2, 1fr) !important;
-            gap: 20px 14px !important;
+            gap: 24px 14px !important;
           }
 
           .artist-card-wrap {
@@ -559,13 +559,24 @@ export default function Home() {
           }
 
           .editorial-strip {
-            padding: 56px 20px !important;
+            padding: 48px 20px !important;
             flex-direction: column !important;
             align-items: flex-start !important;
+            gap: 28px !important;
           }
 
           .editorial-strip > div:last-child {
             align-items: flex-start !important;
+          }
+
+          .home-hero-title {
+            font-size: clamp(38px, 12vw, 72px) !important;
+          }
+        }
+
+        @media (max-width: 420px) {
+          .artists-grid {
+            grid-template-columns: 1fr !important;
           }
         }
       `}</style>

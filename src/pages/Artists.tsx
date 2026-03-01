@@ -227,8 +227,15 @@ export default function Artists() {
         }
         @media (max-width: 768px) {
           .artists-page-wrap {
-            padding: 100px 20px 64px !important;
+            padding: 80px 20px 64px !important;
             gap: 0 !important;
+            flex-direction: column !important;
+          }
+          .artist-preview-col {
+            display: none !important;
+          }
+          .artist-list-link {
+            padding: 16px 0 !important;
           }
         }
       `}</style>

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, Outlet, useLocation, Navigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -10,14 +11,16 @@ import {
   UserCog,
   LogOut,
   Loader2,
+  Menu,
+  X,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 export default function AdminLayout() {
   const location = useLocation();
   const { user, loading, logout } = useAuth();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Token doğrulanıyor
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f9f9f9]">
@@ -26,7 +29,6 @@ export default function AdminLayout() {
     );
   }
 
-  // Giriş yapılmamış → login'e yönlendir
   if (!user) {
     return <Navigate to="/admin/login" state={{ from: location }} replace />;
   }
@@ -40,74 +42,122 @@ export default function AdminLayout() {
     { name: 'Users',           path: '/admin/users',         icon: UserCog },
   ];
 
+  const closeSidebar = () => setSidebarOpen(false);
+
+  const SidebarContent = () => (
+    <>
+      <div className="p-6 flex items-center justify-between">
+        <Link to="/" className="block h-5 hover:opacity-80 transition-opacity" onClick={closeSidebar}>
+          <img src="/logo.png" alt="FAZILET SECGIN" className="h-full w-auto object-contain" />
+        </Link>
+        {/* Mobile close button */}
+        <button
+          onClick={closeSidebar}
+          className="md:hidden p-1 text-ink/40 hover:text-ink transition-colors"
+        >
+          <X size={20} />
+        </button>
+      </div>
+
+      <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
+        {navItems.map((item) => {
+          const isActive = location.pathname === item.path ||
+                           (item.path !== '/admin' && location.pathname.startsWith(item.path));
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.name}
+              to={item.path}
+              onClick={closeSidebar}
+              className={`flex items-center space-x-3 px-4 py-3 rounded-md transition-colors duration-200 ${
+                isActive
+                  ? 'bg-ink/5 text-ink font-medium'
+                  : 'text-ink/60 hover:bg-ink/5 hover:text-ink'
+              }`}
+            >
+              <Icon size={18} strokeWidth={isActive ? 2 : 1.5} />
+              <span className="text-sm tracking-wide">{item.name}</span>
+            </Link>
+          );
+        })}
+      </nav>
+
+      <div className="p-4 border-t border-ink/5 space-y-1">
+        <div className="px-4 py-3 mb-1">
+          <p className="text-xs font-medium text-ink truncate">{user.name}</p>
+          <p className="text-[10px] text-ink/40 tracking-wider uppercase">{user.role}</p>
+        </div>
+
+        <a
+          href="/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center space-x-3 px-4 py-3 w-full rounded-md text-ink/60 hover:bg-ink/5 hover:text-ink transition-colors duration-200"
+        >
+          <ExternalLink size={18} strokeWidth={1.5} />
+          <span className="text-sm tracking-wide">View Site</span>
+        </a>
+
+        <button
+          onClick={logout}
+          className="flex items-center space-x-3 px-4 py-3 w-full text-left rounded-md text-ink/60 hover:bg-red-50 hover:text-red-600 transition-colors duration-200"
+        >
+          <LogOut size={18} strokeWidth={1.5} />
+          <span className="text-sm tracking-wide">Çıkış Yap</span>
+        </button>
+
+        <button className="flex items-center space-x-3 px-4 py-3 w-full text-left rounded-md text-ink/60 hover:bg-ink/5 hover:text-ink transition-colors duration-200">
+          <Settings size={18} strokeWidth={1.5} />
+          <span className="text-sm tracking-wide">Settings</span>
+        </button>
+      </div>
+    </>
+  );
+
   return (
     <div className="min-h-screen flex bg-[#F9F9F9] text-ink font-sans">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-ink/5 fixed h-full flex flex-col">
-        <div className="p-8">
-          <Link to="/" className="block h-6 hover:opacity-80 transition-opacity">
-            <img src="/logo.png" alt="FAZILET SECGIN" className="h-full w-auto object-contain" />
-          </Link>
-        </div>
 
-        <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
-          {navItems.map((item) => {
-            const isActive = location.pathname === item.path ||
-                             (item.path !== '/admin' && location.pathname.startsWith(item.path));
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.name}
-                to={item.path}
-                className={`flex items-center space-x-3 px-4 py-3 rounded-md transition-colors duration-200 ${
-                  isActive
-                    ? 'bg-ink/5 text-ink font-medium'
-                    : 'text-ink/60 hover:bg-ink/5 hover:text-ink'
-                }`}
-              >
-                <Icon size={18} strokeWidth={isActive ? 2 : 1.5} />
-                <span className="text-sm tracking-wide">{item.name}</span>
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="p-4 border-t border-ink/5 space-y-1">
-          {/* Kullanıcı bilgisi */}
-          <div className="px-4 py-3 mb-1">
-            <p className="text-xs font-medium text-ink truncate">{user.name}</p>
-            <p className="text-[10px] text-ink/40 tracking-wider uppercase">{user.role}</p>
-          </div>
-
-          <a
-            href="/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center space-x-3 px-4 py-3 w-full rounded-md text-ink/60 hover:bg-ink/5 hover:text-ink transition-colors duration-200"
-          >
-            <ExternalLink size={18} strokeWidth={1.5} />
-            <span className="text-sm tracking-wide">View Site</span>
-          </a>
-
-          <button
-            onClick={logout}
-            className="flex items-center space-x-3 px-4 py-3 w-full text-left rounded-md text-ink/60 hover:bg-red-50 hover:text-red-600 transition-colors duration-200"
-          >
-            <LogOut size={18} strokeWidth={1.5} />
-            <span className="text-sm tracking-wide">Çıkış Yap</span>
-          </button>
-
-          <button className="flex items-center space-x-3 px-4 py-3 w-full text-left rounded-md text-ink/60 hover:bg-ink/5 hover:text-ink transition-colors duration-200">
-            <Settings size={18} strokeWidth={1.5} />
-            <span className="text-sm tracking-wide">Settings</span>
-          </button>
-        </div>
+      {/* ── Desktop Sidebar (md+) ── */}
+      <aside className="hidden md:flex w-64 bg-white border-r border-ink/5 fixed h-full flex-col z-30">
+        <SidebarContent />
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 ml-64 p-10">
-        <div className="max-w-6xl mx-auto">
-          <Outlet />
+      {/* ── Mobile Overlay ── */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 z-40 md:hidden"
+          onClick={closeSidebar}
+        />
+      )}
+
+      {/* ── Mobile Sidebar (slide-in) ── */}
+      <aside
+        className={`fixed top-0 left-0 h-full w-72 bg-white z-50 flex flex-col md:hidden transform transition-transform duration-300 ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+        style={{ boxShadow: sidebarOpen ? '4px 0 24px rgba(0,0,0,0.12)' : 'none' }}
+      >
+        <SidebarContent />
+      </aside>
+
+      {/* ── Main Content ── */}
+      <main className="flex-1 md:ml-64">
+        {/* Mobile top bar */}
+        <div className="md:hidden sticky top-0 z-30 bg-white border-b border-ink/5 flex items-center justify-between px-4 py-3">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="p-2 text-ink/60 hover:text-ink transition-colors"
+          >
+            <Menu size={22} />
+          </button>
+          <img src="/logo.png" alt="FAZILET SECGIN" className="h-5 object-contain" />
+          <div className="w-10" /> {/* spacer */}
+        </div>
+
+        <div className="p-4 md:p-10">
+          <div className="max-w-6xl mx-auto">
+            <Outlet />
+          </div>
         </div>
       </main>
     </div>
