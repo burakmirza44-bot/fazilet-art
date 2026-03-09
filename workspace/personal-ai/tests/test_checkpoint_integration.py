@@ -662,8 +662,100 @@ class TestCheckpointHelpers:
             assert reason == "checkpoint_valid_and_fresh"
 
 
-class TestCheckpointIntegration:
-    """Integration tests for checkpoint system."""
+class TestDomainExecutionLoopCheckpoint:
+    """Tests for checkpoint integration in domain execution loops."""
+
+    def test_td_execution_loop_checkpoint_config(self):
+        """Test TouchDesigner execution loop checkpoint configuration."""
+        from app.domains.touchdesigner.td_execution_loop import TDExecutionConfig, TDExecutionLoop
+
+        config = TDExecutionConfig(
+            enable_checkpoints=True,
+            task_id="test_task",
+            plan_id="test_plan",
+        )
+        loop = TDExecutionLoop(config)
+
+        assert loop._config.enable_checkpoints is True
+        assert loop._checkpoint_lifecycle is not None
+        assert loop._resume_manager is not None
+
+    def test_houdini_execution_loop_checkpoint_config(self):
+        """Test Houdini execution loop checkpoint configuration."""
+        from app.domains.houdini.houdini_execution_loop import HoudiniExecutionConfig, HoudiniExecutionLoop
+
+        config = HoudiniExecutionConfig(
+            enable_checkpoints=True,
+            task_id="test_task",
+            plan_id="test_plan",
+        )
+        loop = HoudiniExecutionLoop(config)
+
+        assert loop._config.enable_checkpoints is True
+        assert loop._checkpoint_lifecycle is not None
+        assert loop._resume_manager is not None
+
+    def test_td_run_report_checkpoint_fields(self):
+        """Test TouchDesigner run report includes checkpoint fields."""
+        from app.domains.touchdesigner.td_execution_loop import TDRunReport
+
+        report = TDRunReport(
+            checkpoint_created=True,
+            checkpoint_id="test_checkpoint",
+            resumed_from_checkpoint=True,
+            recovery_mode="retry",
+        )
+
+        data = report.to_dict()
+        assert data["checkpoint_created"] is True
+        assert data["checkpoint_id"] == "test_checkpoint"
+        assert data["resumed_from_checkpoint"] is True
+        assert data["recovery_mode"] == "retry"
+
+    def test_houdini_run_report_checkpoint_fields(self):
+        """Test Houdini run report includes checkpoint fields."""
+        from app.domains.houdini.houdini_execution_loop import HoudiniRunReport
+
+        report = HoudiniRunReport(
+            checkpoint_created=True,
+            checkpoint_id="test_checkpoint",
+            resumed_from_checkpoint=True,
+            recovery_mode="safe",
+        )
+
+        data = report.to_dict()
+        assert data["checkpoint_created"] is True
+        assert data["checkpoint_id"] == "test_checkpoint"
+        assert data["resumed_from_checkpoint"] is True
+        assert data["recovery_mode"] == "safe"
+
+    def test_td_execution_without_checkpoint(self):
+        """Test TouchDesigner execution without checkpoints enabled."""
+        from app.domains.touchdesigner.td_execution_loop import TDExecutionConfig, TDExecutionLoop
+
+        config = TDExecutionConfig(enable_checkpoints=False)
+        loop = TDExecutionLoop(config)
+
+        assert loop._checkpoint_lifecycle is None
+        assert loop._resume_manager is None
+
+        # attempt_resume should return None when disabled
+        result = loop.attempt_resume()
+        assert result is None
+
+    def test_houdini_execution_without_checkpoint(self):
+        """Test Houdini execution without checkpoints enabled."""
+        from app.domains.houdini.houdini_execution_loop import HoudiniExecutionConfig, HoudiniExecutionLoop
+
+        config = HoudiniExecutionConfig(enable_checkpoints=False)
+        loop = HoudiniExecutionLoop(config)
+
+        assert loop._checkpoint_lifecycle is None
+        assert loop._resume_manager is None
+
+        # attempt_resume should return None when disabled
+        result = loop.attempt_resume()
+        assert result is None
 
     def test_full_checkpoint_lifecycle(self):
         """Test full checkpoint creation, save, load, resume lifecycle."""

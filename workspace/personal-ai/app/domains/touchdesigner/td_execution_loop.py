@@ -1,7 +1,7 @@
 """TouchDesigner Execution Loop.
 
 Provides execution loop for TouchDesigner with unified backend selection,
-bridge health monitoring, and memory integration.
+bridge health monitoring, memory integration, and checkpoint/resume support.
 """
 
 from __future__ import annotations
@@ -17,6 +17,9 @@ from app.core.bridge_health import (
     check_bridge_health,
     normalize_bridge_error,
 )
+from app.core.checkpoint import CheckpointStatus
+from app.core.checkpoint_lifecycle import CheckpointLifecycle
+from app.core.checkpoint_resume import ResumeManager, ResumeResult
 from app.core.memory_runtime import (
     RuntimeMemoryContext,
     build_runtime_memory_context,
@@ -41,6 +44,15 @@ class TDRunReport:
     repair_patterns_used: int = 0
     step_count: int = 0
     execution_time_ms: float = 0.0
+    # Checkpoint metadata
+    checkpoint_created: bool = False
+    checkpoint_id: str | None = None
+    checkpoint_saved: bool = False
+    resumed_from_checkpoint: bool = False
+    resume_checkpoint_id: str | None = None
+    resume_success: bool = False
+    recovery_mode: str = ""
+    replayed_steps: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
@@ -55,6 +67,15 @@ class TDRunReport:
             "repair_patterns_used": self.repair_patterns_used,
             "step_count": self.step_count,
             "execution_time_ms": self.execution_time_ms,
+            # Checkpoint metadata
+            "checkpoint_created": self.checkpoint_created,
+            "checkpoint_id": self.checkpoint_id,
+            "checkpoint_saved": self.checkpoint_saved,
+            "resumed_from_checkpoint": self.resumed_from_checkpoint,
+            "resume_checkpoint_id": self.resume_checkpoint_id,
+            "resume_success": self.resume_success,
+            "recovery_mode": self.recovery_mode,
+            "replayed_steps": self.replayed_steps,
         }
 
 
@@ -71,6 +92,11 @@ class TDExecutionConfig:
     require_window_focus: bool = True
     repo_root: str = "."
     enable_memory: bool = True
+    # Checkpoint settings
+    enable_checkpoints: bool = False
+    task_id: str = ""
+    session_id: str = ""
+    plan_id: str = ""
 
 
 class TDExecutionLoop:
@@ -99,6 +125,19 @@ class TDExecutionLoop:
         self._bridge_executor: TDBridgeExecutor | None = None
         self._recipe_executor: RecipeExecutor | None = None
         self._error_memory: list[NormalizedError] = []
+
+        # Checkpoint support
+        self._checkpoint_lifecycle: CheckpointLifecycle | None = None
+        self._resume_manager: ResumeManager | None = None
+        self._current_checkpoint = None
+        self._resume_result: ResumeResult | None = None
+
+        if self._config.enable_checkpoints:
+            self._checkpoint_lifecycle = CheckpointLifecycle(repo_root=self._config.repo_root)
+            self._resume_manager = ResumeManager(
+                lifecycle=self._checkpoint_lifecycle,
+                repo_root=self._config.repo_root,
+            )
 
     @property
     def config(self) -> TDExecutionConfig:
@@ -215,13 +254,15 @@ class TDExecutionLoop:
         task: Any,
         use_live_bridge: bool = True,
         dry_run: bool = False,
+        attempt_resume: bool = True,
     ) -> TDRunReport:
-        """Run basic TOP chain with bridge health and memory integration.
+        """Run basic TOP chain with bridge health, memory, and checkpoint integration.
 
         Args:
             task: Task to execute (must have task_summary attribute)
             use_live_bridge: Whether to use live bridge
             dry_run: Whether to run in dry-run mode
+            attempt_resume: Whether to attempt resume from checkpoint
 
         Returns:
             TDRunReport with execution results
@@ -230,6 +271,16 @@ class TDExecutionLoop:
 
         report = TDRunReport()
         start_time = time.perf_counter()
+
+        # Attempt resume if enabled
+        if attempt_resume and self._config.enable_checkpoints:
+            resume_result = self.attempt_resume()
+            if resume_result:
+                report.resumed_from_checkpoint = resume_result.success
+                report.resume_checkpoint_id = resume_result.checkpoint_id
+                report.resume_success = resume_result.success
+                report.recovery_mode = resume_result.recovery_mode
+                report.replayed_steps = len(resume_result.replayed_steps)
 
         live_host = self._config.bridge_host
         live_port = self._config.bridge_port
@@ -244,7 +295,7 @@ class TDExecutionLoop:
                 normalized = normalize_bridge_error(
                     bridge_health,
                     "touchdesigner",
-                    getattr(task, "task_id", "unknown"),
+                    getattr(task, "task_id", self._config.task_id),
                 )
                 self._error_memory.append(normalized)
 
@@ -295,6 +346,8 @@ class TDExecutionLoop:
                     result_data={
                         "description": f"Executed TOP chain for {getattr(task, 'task_summary', 'unknown')}",
                         "bridge_used": use_live_bridge and not dry_run,
+                        "checkpoint_id": report.checkpoint_id,
+                        "resumed": report.resumed_from_checkpoint,
                     },
                     repo_root=self._config.repo_root,
                 )
@@ -307,7 +360,7 @@ class TDExecutionLoop:
                 e,
                 context={
                     "domain": "touchdesigner",
-                    "task_id": getattr(task, "task_id", "unknown"),
+                    "task_id": getattr(task, "task_id", self._config.task_id),
                 },
             )
             self._error_memory.append(normalized)
@@ -381,6 +434,31 @@ class TDExecutionLoop:
             )
 
         return self._bridge_executor.ping()
+
+    def attempt_resume(self) -> ResumeResult | None:
+        """Attempt to resume from a checkpoint.
+
+        Returns:
+            ResumeResult if resume was attempted, None if checkpoints disabled
+        """
+        if not self._config.enable_checkpoints or not self._resume_manager:
+            return None
+
+        if not self._config.task_id:
+            return None
+
+        result = self._resume_manager.attempt_resume(
+            task_id=self._config.task_id,
+            plan_id=self._config.plan_id,
+            session_id=self._config.session_id,
+        )
+
+        self._resume_result = result
+
+        if result.success and result.resume_context:
+            self._current_checkpoint = result.resume_context.checkpoint
+
+        return result
 
     def shutdown(self) -> None:
         """Shutdown the execution loop."""

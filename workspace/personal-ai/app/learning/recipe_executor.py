@@ -1,7 +1,8 @@
 """Recipe Executor Module.
 
 Provides recipe execution with backend selection integration,
-bridge executors for TD and Houdini, and precondition validation.
+bridge executors for TD and Houdini, precondition validation,
+and checkpoint/resume support.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from typing import Any
 from app.agent_core.backend_policy import BackendPolicy, BackendType
 from app.agent_core.backend_result import BackendSelectionResult
 from app.agent_core.backend_selector import BackendSelector
+from app.core.checkpoint import Checkpoint, StepStatus, create_step_id
 
 
 @dataclass(slots=True)
@@ -45,6 +47,42 @@ class PreconditionsReport:
     def add_warning(self, warning: str) -> None:
         """Add a warning to the report."""
         self.warnings.append(warning)
+
+
+@dataclass(slots=True)
+class RecipeExecutorResult:
+    """Result of recipe execution with checkpoint support."""
+
+    success: bool = False
+    step_count: int = 0
+    step_results: list[dict[str, Any]] = field(default_factory=list)
+    selection: dict[str, Any] = field(default_factory=dict)
+    error: str | None = None
+    step_index: int | None = None
+    # Checkpoint metadata
+    checkpoint_created: bool = False
+    checkpoint_id: str | None = None
+    checkpoint_saved: bool = False
+    resumed_from_checkpoint: bool = False
+    resumed_from_step: int | None = None
+    completed_steps_from_checkpoint: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "success": self.success,
+            "step_count": self.step_count,
+            "step_results": self.step_results,
+            "selection": self.selection,
+            "error": self.error,
+            "step_index": self.step_index,
+            "checkpoint_created": self.checkpoint_created,
+            "checkpoint_id": self.checkpoint_id,
+            "checkpoint_saved": self.checkpoint_saved,
+            "resumed_from_checkpoint": self.resumed_from_checkpoint,
+            "resumed_from_step": self.resumed_from_step,
+            "completed_steps_from_checkpoint": self.completed_steps_from_checkpoint,
+        }
 
 
 class BridgeExecutor(ABC):
@@ -272,26 +310,40 @@ class HoudiniBridgeExecutor(BridgeExecutor):
 
 
 class RecipeExecutor:
-    """Executes recipes with unified backend selection.
+    """Executes recipes with unified backend selection and checkpoint support.
 
     Uses BackendSelector for consistent backend selection across
-    all recipe steps, with fallback support and safety integration.
+    all recipe steps, with fallback support, safety integration,
+    and checkpoint/resume for long-running recipes.
     """
 
     def __init__(
         self,
         selector: BackendSelector | None = None,
         bridge_executors: dict[str, BridgeExecutor] | None = None,
+        enable_checkpoints: bool = False,
+        repo_root: str = ".",
+        task_id: str = "",
+        session_id: str = "",
     ):
         """Initialize the RecipeExecutor.
 
         Args:
             selector: Optional BackendSelector (creates default if None)
             bridge_executors: Optional dict of domain -> BridgeExecutor
+            enable_checkpoints: Whether to enable checkpoint/resume
+            repo_root: Repository root for checkpoint storage
+            task_id: Task ID for checkpoint tracking
+            session_id: Session ID for checkpoint tracking
         """
         self._selector = selector or BackendSelector()
         self._bridge_executors = bridge_executors or {}
         self._last_selection: BackendSelectionResult | None = None
+        self._enable_checkpoints = enable_checkpoints
+        self._repo_root = repo_root
+        self._task_id = task_id
+        self._session_id = session_id
+        self._current_checkpoint: Checkpoint | None = None
 
     def register_bridge_executor(self, domain: str, executor: BridgeExecutor) -> None:
         """Register a bridge executor for a domain.
@@ -343,31 +395,178 @@ class RecipeExecutor:
 
         return report
 
+    def create_checkpoint(
+        self,
+        recipe: dict[str, Any],
+        domain: str,
+    ) -> Checkpoint | None:
+        """Create a checkpoint for recipe execution.
+
+        Args:
+            recipe: Recipe being executed
+            domain: Execution domain
+
+        Returns:
+            Checkpoint or None if checkpoints disabled
+        """
+        if not self._enable_checkpoints:
+            return None
+
+        # Local import to avoid circular dependency
+        from app.core.checkpoint_lifecycle import CheckpointLifecycle
+
+        if not self._task_id:
+            return None
+
+        steps = recipe.get("steps", [])
+        lifecycle = CheckpointLifecycle(repo_root=self._repo_root)
+        checkpoint = lifecycle.create_checkpoint(
+            task_id=self._task_id,
+            session_id=self._session_id or f"session_{int(time.time())}",
+            plan_id=recipe.get("plan_id") or f"recipe_{self._task_id}",
+            domain=domain,
+            current_goal=recipe.get("description", recipe.get("name", "")),
+            steps=steps,
+            checkpoint_reason="recipe_start",
+        )
+
+        self._current_checkpoint = checkpoint
+        self._checkpoint_lifecycle = lifecycle
+        return checkpoint
+
+    def update_step_checkpoint(
+        self,
+        step_index: int,
+        status: StepStatus,
+        result: dict[str, Any] | None = None,
+        error: dict[str, Any] | None = None,
+    ) -> bool:
+        """Update checkpoint for a step completion.
+
+        Args:
+            step_index: Index of the step
+            status: New step status
+            result: Optional step result
+            error: Optional error information
+
+        Returns:
+            True if checkpoint was updated
+        """
+        if not self._enable_checkpoints or not self._current_checkpoint:
+            return False
+
+        # Local import to avoid circular dependency
+        from app.core.checkpoint_lifecycle import CheckpointLifecycle
+
+        # Get step ID from checkpoint order
+        if step_index >= len(self._current_checkpoint.step_order):
+            return False
+
+        step_id = self._current_checkpoint.step_order[step_index]
+        verified = result.get("verified", False) if result else False
+
+        try:
+            lifecycle = CheckpointLifecycle(repo_root=self._repo_root)
+            lifecycle.update_checkpoint(
+                checkpoint=self._current_checkpoint,
+                step_id=step_id,
+                step_status=status,
+                step_result=result,
+                error=error,
+                verified=verified,
+            )
+            lifecycle.save_checkpoint(self._current_checkpoint)
+            return True
+        except Exception:
+            return False
+
+    def mark_recipe_completed(self) -> bool:
+        """Mark recipe as completed in checkpoint.
+
+        Returns:
+            True if checkpoint was updated
+        """
+        if not self._enable_checkpoints or not self._current_checkpoint:
+            return False
+
+        # Local import to avoid circular dependency
+        from app.core.checkpoint_lifecycle import CheckpointLifecycle, CheckpointStatus
+
+        try:
+            lifecycle = CheckpointLifecycle(repo_root=self._repo_root)
+            lifecycle.mark_checkpoint_status(
+                checkpoint=self._current_checkpoint,
+                status=CheckpointStatus.COMPLETED,
+                reason="Recipe completed successfully",
+            )
+            lifecycle.save_checkpoint(self._current_checkpoint)
+            return True
+        except Exception:
+            return False
+
+    def attempt_resume(
+        self,
+        recipe: dict[str, Any],
+        domain: str,
+    ) -> tuple[bool, int]:
+        """Attempt to resume from checkpoint.
+
+        Args:
+            recipe: Recipe to execute
+            domain: Execution domain
+
+        Returns:
+            Tuple of (resumed, skip_steps_count)
+        """
+        if not self._enable_checkpoints or not self._task_id:
+            return False, 0
+
+        from app.core.checkpoint_resume import ResumeManager
+
+        resume_manager = ResumeManager(
+            lifecycle=self._checkpoint_lifecycle,
+            repo_root=self._repo_root,
+        )
+
+        result = resume_manager.attempt_resume(
+            task_id=self._task_id,
+            plan_id=recipe.get("plan_id"),
+        )
+
+        if result.success and result.resume_context:
+            self._current_checkpoint = result.resume_context.checkpoint
+            skip_count = len(result.resume_context.resume_decision.steps_to_skip)
+            return True, skip_count
+
+        return False, 0
+
     def execute_recipe(
         self,
         recipe: dict[str, Any],
         policy: BackendPolicy,
         dry_run: bool = False,
-    ) -> dict[str, Any]:
-        """Execute a complete recipe.
+        attempt_resume: bool = True,
+    ) -> RecipeExecutorResult:
+        """Execute a complete recipe with checkpoint support.
 
         Args:
             recipe: Recipe to execute
             policy: Backend policy for execution
             dry_run: Force dry-run mode
+            attempt_resume: Whether to attempt resume from checkpoint
 
         Returns:
-            Execution result with step results
+            RecipeExecutorResult with execution status and checkpoint metadata
         """
+        result = RecipeExecutorResult()
+        domain = policy.domain
+
         # Validate preconditions
         report = self.validate_preconditions(recipe, policy)
         if not report.valid:
-            return {
-                "success": False,
-                "error": "Precondition validation failed",
-                "errors": report.errors,
-                "warnings": report.warnings,
-            }
+            result.success = False
+            result.error = "Precondition validation failed"
+            return result
 
         # Override policy if dry_run requested
         if dry_run:
@@ -376,39 +575,80 @@ class RecipeExecutor:
         # Select backend
         selection = self._selector.select(policy)
         self._last_selection = selection
+        result.selection = selection.to_dict()
 
         if not selection.is_executable:
-            return {
-                "success": False,
-                "error": f"No executable backend: {selection.message}",
-                "selection": selection.to_dict(),
-            }
+            result.success = False
+            result.error = f"No executable backend: {selection.message}"
+            return result
+
+        # Attempt resume if enabled
+        resumed = False
+        skip_steps = 0
+        if attempt_resume and self._enable_checkpoints:
+            resumed, skip_steps = self.attempt_resume(recipe, domain)
+            result.resumed_from_checkpoint = resumed
+            result.resumed_from_step = skip_steps if resumed else None
+            result.completed_steps_from_checkpoint = skip_steps
+
+        # Create checkpoint if not resuming
+        if self._enable_checkpoints and not resumed:
+            checkpoint = self.create_checkpoint(recipe, domain)
+            if checkpoint:
+                result.checkpoint_created = True
+                result.checkpoint_id = checkpoint.checkpoint_id
+                result.checkpoint_saved = True
 
         # Execute steps
         steps = recipe.get("steps", [])
-        results = []
+        result.step_count = len(steps)
+        step_results = []
 
         for i, step in enumerate(steps):
-            step_result = self.execute_step(step, selection, policy.domain)
-            results.append(step_result)
+            # Skip already completed steps from resume
+            if resumed and i < skip_steps:
+                continue
+
+            # Mark step as in-progress in checkpoint
+            if self._enable_checkpoints:
+                self.update_step_checkpoint(i, StepStatus.IN_PROGRESS)
+
+            step_result = self.execute_step(step, selection, domain)
+            step_results.append(step_result)
+
+            # Update checkpoint based on result
+            if self._enable_checkpoints:
+                if step_result.get("success", False):
+                    self.update_step_checkpoint(
+                        i,
+                        StepStatus.COMPLETED_VERIFIED if step_result.get("verified") else StepStatus.COMPLETED,
+                        step_result,
+                    )
+                else:
+                    self.update_step_checkpoint(
+                        i,
+                        StepStatus.FAILED,
+                        step_result,
+                        error={"message": step_result.get("error", "Unknown error")},
+                    )
 
             # Stop on failure unless continue_on_error
             if not step_result.get("success", False):
                 if not step.get("continue_on_error", False):
-                    return {
-                        "success": False,
-                        "error": f"Step {i} failed: {step_result.get('error', 'Unknown error')}",
-                        "step_index": i,
-                        "step_results": results,
-                        "selection": selection.to_dict(),
-                    }
+                    result.success = False
+                    result.error = f"Step {i} failed: {step_result.get('error', 'Unknown error')}"
+                    result.step_index = i
+                    result.step_results = step_results
+                    return result
 
-        return {
-            "success": True,
-            "step_count": len(steps),
-            "step_results": results,
-            "selection": selection.to_dict(),
-        }
+        result.success = True
+        result.step_results = step_results
+
+        # Mark checkpoint as completed
+        if self._enable_checkpoints:
+            self.mark_recipe_completed()
+
+        return result
 
     def execute_step(
         self,
