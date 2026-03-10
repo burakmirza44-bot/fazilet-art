@@ -153,13 +153,15 @@ class TestBackendSelectorBridgeHealth:
     def test_bridge_health_check_unavailable(self):
         """Test bridge health check when bridge is unavailable."""
         selector = BackendSelector()
-        policy = BackendPolicy.for_touchdesigner(bridge_port=9988)
+
+        # Use unused port to ensure bridge is unavailable
+        policy = BackendPolicy.for_touchdesigner(bridge_port=59999)
 
         result = selector.check_bridge_health(policy)
 
         assert result.healthy is False
         assert result.host == "127.0.0.1"
-        assert result.port == 9988
+        assert result.port == 59999
 
     def test_bridge_health_caching(self):
         """Test that bridge health is cached."""
@@ -246,6 +248,11 @@ class TestBackendSelectorSelection:
         selector.set_killswitch_check(lambda: False)
         selector.set_window_title_getter(lambda: "TouchDesigner - project")
 
+        # Mock unhealthy bridge
+        mock_client = MagicMock()
+        mock_client.ping.return_value = False
+        selector.register_bridge_client("touchdesigner", mock_client)
+
         policy = BackendPolicy.for_touchdesigner(fallback_to_ui=True)
         result = selector.select(policy)
 
@@ -295,6 +302,11 @@ class TestBackendSelectorSelection:
         # Mock to bypass safety checks
         selector.set_killswitch_check(lambda: False)
         selector.set_window_title_getter(lambda: "TouchDesigner - project")
+
+        # Mock unhealthy bridge to ensure it's rejected
+        mock_client = MagicMock()
+        mock_client.ping.return_value = False
+        selector.register_bridge_client("touchdesigner", mock_client)
 
         policy = BackendPolicy.for_touchdesigner(fallback_to_ui=True)
         result = selector.select(policy)

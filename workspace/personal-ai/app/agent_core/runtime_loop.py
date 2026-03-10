@@ -21,6 +21,15 @@ from app.core.memory_runtime import (
     save_execution_result,
 )
 from app.learning.error_normalizer import NormalizedError, normalize_error
+from app.self_directed_learning.learning_goal_models import (
+    LearningGoalGenerationResult,
+)
+from app.self_directed_learning.runtime_integration import (
+    RuntimeLearningIntegrator,
+    SDLIntegrationResult,
+    get_learning_integrator,
+    initialize_learning_integration,
+)
 
 
 @dataclass
@@ -28,7 +37,7 @@ class RuntimeLoopResult:
     """Result of a runtime loop execution.
 
     Provides visibility into memory usage, bridge health, execution status,
-    and checkpoint/resume metadata.
+    checkpoint/resume metadata, and self-directed learning.
     """
 
     success: bool = False
@@ -54,6 +63,16 @@ class RuntimeLoopResult:
     resume_context: dict[str, Any] | None = None
     replayed_steps: list[str] = field(default_factory=list)
     recovery_mode: str = ""
+    # Self-directed learning metadata
+    learning_goals_generated: bool = False
+    learning_goal_count: int = 0
+    high_priority_learning_goals: int = 0
+    learning_goal_summary: list[dict] = field(default_factory=list)
+    # Verification metadata
+    verified: bool = False
+    verification_confidence: float = 0.0
+    verification_gaps: list[str] = field(default_factory=list)
+    verification_performed: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -81,6 +100,16 @@ class RuntimeLoopResult:
             "resume_context": self.resume_context,
             "replayed_steps": self.replayed_steps,
             "recovery_mode": self.recovery_mode,
+            # Self-directed learning metadata
+            "learning_goals_generated": self.learning_goals_generated,
+            "learning_goal_count": self.learning_goal_count,
+            "high_priority_learning_goals": self.high_priority_learning_goals,
+            "learning_goal_summary": self.learning_goal_summary,
+            # Verification metadata
+            "verified": self.verified,
+            "verification_confidence": self.verification_confidence,
+            "verification_gaps": self.verification_gaps,
+            "verification_performed": self.verification_performed,
         }
 
 
@@ -104,6 +133,7 @@ class IntegratedRuntimeLoop:
         enable_memory: bool = True,
         enable_bridge_health: bool = True,
         enable_checkpoints: bool = True,
+        enable_learning: bool = True,
         task_id: str = "",
         session_id: str = "",
         plan_id: str = "",
@@ -116,6 +146,7 @@ class IntegratedRuntimeLoop:
             enable_memory: Whether to enable memory retrieval/writeback
             enable_bridge_health: Whether to enable bridge health checks
             enable_checkpoints: Whether to enable checkpoint/resume
+            enable_learning: Whether to enable self-directed learning
             task_id: Task ID for checkpoint tracking
             session_id: Session ID for checkpoint tracking
             plan_id: Plan ID for checkpoint tracking
@@ -125,6 +156,7 @@ class IntegratedRuntimeLoop:
         self._enable_memory = enable_memory
         self._enable_bridge_health = enable_bridge_health
         self._enable_checkpoints = enable_checkpoints
+        self._enable_learning = enable_learning
         self._task_id = task_id
         self._session_id = session_id or f"session_{int(time.time())}"
         self._plan_id = plan_id
@@ -144,6 +176,17 @@ class IntegratedRuntimeLoop:
                 repo_root=repo_root,
             )
             self._boundary_detector = CheckpointBoundaryDetector()
+
+        # Initialize learning integration
+        self._learning_integrator: RuntimeLearningIntegrator | None = None
+        if self._enable_learning:
+            integrator = get_learning_integrator()
+            if integrator is None:
+                integrator = initialize_learning_integration(
+                    repo_root=repo_root,
+                    enable_learning=True,
+                )
+            self._learning_integrator = integrator
 
     @property
     def domain(self) -> str:
@@ -669,6 +712,73 @@ class IntegratedRuntimeLoop:
                 repo_root=self._repo_root,
             )
             result.memory_writeback_done = True
+
+        # Generate learning goals from execution evidence
+        if self._enable_learning and self._learning_integrator:
+            sdl_result = self._learning_integrator.generate_from_runtime(
+                session_id=self._session_id,
+                runtime_result=result,
+                domain=self._domain,
+                task_id=task_id or self._task_id,
+            )
+            result.learning_goals_generated = sdl_result.learning_goals_generated
+            result.learning_goal_count = sdl_result.learning_goal_count
+            result.high_priority_learning_goals = sdl_result.high_priority_goals
+            result.learning_goal_summary = [
+                {"id": g.learning_goal_id, "title": g.title, "priority": g.priority}
+                for g in sdl_result.goals
+            ]
+
+        return result
+
+    def execute_goal(
+        self,
+        goal: "GoalArtifact",
+        max_retries: int = 3,
+        verify: bool = True,
+    ) -> RuntimeLoopResult:
+        """Execute a GoalArtifact directly.
+
+        Converts a goal to a step definition and executes it.
+
+        Args:
+            goal: GoalArtifact to execute
+            max_retries: Maximum retry attempts
+            verify: Whether to perform verification
+
+        Returns:
+            RuntimeLoopResult with execution status
+        """
+        from app.agent_core.goal_models import GoalArtifact
+
+        # Convert goal to step
+        step = {
+            "step_id": goal.goal_id,
+            "action": goal.backend_hint or "execute",
+            "description": goal.description,
+            "title": goal.title,
+            "domain": goal.domain,
+            "goal_type": goal.goal_type,
+            "preconditions": list(goal.preconditions),
+            "success_criteria": goal.success_criteria,
+            "verification_hint": goal.verification_hint,
+            "repair_hint": goal.repair_hint,
+            "requires_bridge": goal.domain in ("houdini", "touchdesigner"),
+            "verify": verify and bool(goal.verification_hint),
+            "continue_on_error": False,
+            "metadata": {
+                "confidence": goal.confidence,
+                "execution_feasibility": goal.execution_feasibility,
+            },
+        }
+
+        # Execute the step
+        result = self.execute_step_with_retry(
+            step=step,
+            max_retries=max_retries,
+            task_id=goal.task_id,
+            step_id=goal.goal_id,
+        )
 
         return result
 
