@@ -36,6 +36,14 @@ from app.agent_core.goal_generator import (
     build_goal_request_from_task,
 )
 
+# Import goal store
+from app.agent_core.goal_store import (
+    GoalLifecycleEvent,
+    GoalStats,
+    GoalStore,
+    create_goal_store,
+)
+
 # Import runtime loop
 from app.agent_core.runtime_loop import IntegratedRuntimeLoop, RuntimeLoopResult
 
@@ -125,6 +133,30 @@ from app.agent_core.recipe_rag_integration import (
     decompose_task,
 )
 
+# Import pre-planning retrieval
+from app.agent_core.preplanning_models import (
+    DecisionPoint,
+    DecisionType,
+    ExecutionStrategy,
+    PastExecution,
+    PlanWithRetrieval,
+    StrategySource,
+    SubgoalWithHints,
+    STRATEGY_TEMPLATES,
+)
+from app.agent_core.similar_task_retriever import (
+    RetrievalConfig,
+    SimilarTaskRetriever,
+    create_retriever,
+    extract_strategy_from_execution,
+    format_hints_for_planning,
+)
+from app.agent_core.long_horizon_planner import (
+    PlannerConfig,
+    LongHorizonPlannerWithRetrieval,
+    create_planner,
+)
+
 
 # Lazy import for benchmark_policy_adapter (has circular dependency with app.evals)
 def __getattr__(name: str):
@@ -187,6 +219,11 @@ __all__ = [
     "GoalGenerator",
     "GoalGeneratorConfig",
     "build_goal_request_from_task",
+    # Goal Store
+    "GoalLifecycleEvent",
+    "GoalStats",
+    "GoalStore",
+    "create_goal_store",
     # Runtime Loop
     "IntegratedRuntimeLoop",
     "RuntimeLoopResult",
@@ -254,4 +291,23 @@ __all__ = [
     "TaskType",
     "build_context",
     "decompose_task",
+    # Pre-Planning Retrieval Models
+    "DecisionPoint",
+    "DecisionType",
+    "ExecutionStrategy",
+    "PastExecution",
+    "PlanWithRetrieval",
+    "StrategySource",
+    "SubgoalWithHints",
+    "STRATEGY_TEMPLATES",
+    # Similar Task Retriever
+    "RetrievalConfig",
+    "SimilarTaskRetriever",
+    "create_retriever",
+    "extract_strategy_from_execution",
+    "format_hints_for_planning",
+    # Long-Horizon Planner
+    "PlannerConfig",
+    "LongHorizonPlannerWithRetrieval",
+    "create_planner",
 ]
