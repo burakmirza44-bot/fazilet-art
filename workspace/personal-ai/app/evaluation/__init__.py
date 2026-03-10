@@ -30,6 +30,27 @@ Example:
     evaluator = OutputEvaluator()
     result = evaluator.evaluate_recipe_output(recipe)
     print(result.summary())
+
+Post-Execution Verification:
+    from app.evaluation import ExecutionVerifier, ExpectedState
+
+    # Create verifier
+    verifier = ExecutionVerifier()
+
+    # Define expected state
+    expected = ExpectedState(
+        new_elements_visible=["comp1"],
+        node_count=1
+    )
+
+    # Verify execution
+    report = verifier.verify_execution(
+        action="Create comp1 node",
+        before_screenshot="before.png",
+        after_screenshot="after.png",
+        expected_state=expected,
+        app="touchdesigner"
+    )
 """
 
 from app.evaluation.models import (
@@ -74,6 +95,38 @@ from app.evaluation.service import (
     should_ship_output,
     should_update_kb,
 )
+from app.evaluation.verification_models import (
+    AssertionType,
+    ExpectedState,
+    VerificationAssertion,
+    VerificationMethod,
+    VisualVerificationResult,
+    StateQueryVerificationResult,
+    ExecutionVerificationReport,
+)
+from app.evaluation.execution_verifier import (
+    ExecutionVerifier,
+    VerifierConfig,
+    create_execution_verifier,
+)
+from app.evaluation.visual_verifier import (
+    VisualVerifier,
+    VisualUnderstandingPipeline,
+    create_visual_verifier,
+)
+from app.evaluation.state_verifier import (
+    StateQueryVerifier,
+    ApplicationState,
+    create_state_query_verifier,
+)
+from app.evaluation.screenshot_utils import (
+    ScreenshotCapture,
+    TDScreenshotCapture,
+    HoudiniScreenshotCapture,
+    take_screenshot,
+    take_td_screenshot,
+    take_houdini_screenshot,
+)
 
 __all__ = [
     # Models
@@ -113,4 +166,29 @@ __all__ = [
     "should_promote_output",
     "should_ship_output",
     "should_update_kb",
+    # Verification Models
+    "AssertionType",
+    "ExpectedState",
+    "VerificationAssertion",
+    "VerificationMethod",
+    "VisualVerificationResult",
+    "StateQueryVerificationResult",
+    "ExecutionVerificationReport",
+    # Verifiers
+    "ExecutionVerifier",
+    "VerifierConfig",
+    "create_execution_verifier",
+    "VisualVerifier",
+    "VisualUnderstandingPipeline",
+    "create_visual_verifier",
+    "StateQueryVerifier",
+    "ApplicationState",
+    "create_state_query_verifier",
+    # Screenshot Utils
+    "ScreenshotCapture",
+    "TDScreenshotCapture",
+    "HoudiniScreenshotCapture",
+    "take_screenshot",
+    "take_td_screenshot",
+    "take_houdini_screenshot",
 ]
